@@ -1,21 +1,22 @@
 <?php
 /**
+ * update_domains.php
+ *
  * This script aggregates domain data from various remote sources,
  * normalizes and filters them (excluding any already known domains),
- * tests each domain via asynchronous DNS queries using Amp,
- * and writes the active and inactive domains to separate files stored in the repository.
+ * tests each domain via DNS queries in parallel using PCNTL,
+ * and writes the active and inactive domains to separate files stored
+ * in the repository.
  *
  * The final files will be available at:
  *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/working_domains.txt
  *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/inactive_domains.txt
  *
- * Dependencies:
- *   Run "composer install" to install required packages.
+ * This version does not rely on Composer/third‑party packages.
+ * It uses PHP's built‑in PCNTL functions for parallel processing.
  */
 
-require __DIR__ . '/vendor/autoload.php'; // Load Composer autoloader
-
-// Enable error reporting (adjust for production)
+// Enable error reporting for debugging (adjust as needed)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -29,7 +30,7 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 
 // Define source URLs
 
-// TXT domain lists (currently commented out; add URLs as needed)
+// TXT domain lists (uncomment and add URLs as needed)
 // $txtUrls = [
 //     'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
 //     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
@@ -38,7 +39,7 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 //     'https://v.firebog.net/hosts/Easylist.txt',
 //     'https://raw.githubusercontent.com/StevenBlack/hosts/refs/heads/master/data/KADhosts/hosts'
 // ];
-$txtUrls = [];
+$txtUrls = [];  // Currently not in use
 
 // Whitelist URLs (using GitHub raw URLs)
 $txtUrlsWhitelist = [
@@ -52,17 +53,14 @@ $csvUrls = [
 ];
 
 /**
- * Normalize a domain string.
+ * Normalize a domain string by removing IP prefixes, quotes, URL schemes, and trailing slashes.
  */
 function normalizeDomain($domain) {
-    // Remove any leading IP patterns (e.g. "0.0.0.0 " or "127.0.0.1 ")
     $domain = preg_replace('/^(0\.0\.0\.0|127\.0\.0\.1)\s+/', '', $domain);
     $domain = trim($domain);
     $domain = str_replace('"', '', $domain);
     $domain = rtrim($domain, ',');
-    // Remove http:// or https:// (case-insensitive)
     $domain = preg_replace('/^https?:\/\//i', '', $domain);
-    // Remove any trailing slash
     $domain = rtrim($domain, '/');
     return $domain;
 }
@@ -81,12 +79,11 @@ foreach ($txtUrls as $txtUrl) {
     $lines = explode("\n", $txtContent);
     foreach ($lines as $line) {
         $line = trim($line);
-        // Skip empty lines and comments
         if ($line === '' || strpos($line, '#') === 0) {
             continue;
         }
         $domain = normalizeDomain($line);
-        // Only add if not already in previous active/inactive lists.
+        // Only add if not already in previous active or inactive lists.
         if (!in_array($domain, $prevActiveDomains) && !in_array($domain, $prevInactiveDomains)) {
             $newDomains[] = $domain;
         }
@@ -110,7 +107,6 @@ foreach ($csvUrls as $csvUrl) {
     if (count($rows) < 1) {
         die("Error: CSV data is empty or invalid.");
     }
-    // Assume the first row is headers.
     $headers = array_shift($rows);
     $colIndex = array_search("Block List v3", $headers);
     if ($colIndex === false) {
@@ -145,45 +141,93 @@ foreach ($txtUrlsWhitelist as $txtUrl) {
         $whitelistDomains[] = normalizeDomain($line);
     }
 }
-// Remove whitelisted domains.
+// Remove whitelisted domains from newDomains.
 $newDomains = array_diff($newDomains, $whitelistDomains);
-// Remove duplicates.
+// Remove duplicates and reindex.
 $newDomains = array_values(array_unique($newDomains));
 
 /*
- * 4. DNS Check: Asynchronous lookup using Amp.
+ * 4. DNS Check (Parallel using PCNTL if available).
  */
-use Amp\Loop;
-use Amp\Dns;
-use function Amp\call;
-use function Amp\Promise\all;
-
 $activeDomains = [];
 $inactiveDomains = [];
 
-// Run asynchronous event loop.
-Loop::run(function () use ($newDomains, &$activeDomains, &$inactiveDomains) {
-    $promises = [];
-    foreach ($newDomains as $domain) {
-        $promises[$domain] = call(function () use ($domain) {
-            try {
-                // Amp's DNS query returns an array of A records if successful.
-                yield Dns\query($domain, 'A');
-                return true;
-            } catch (\Throwable $e) {
-                return false;
+/**
+ * Performs parallel DNS checks using pcntl_fork.
+ *
+ * @param array $domains List of domains to check.
+ * @param int   $concurrency Maximum number of simultaneous child processes.
+ * @return array Tuple: [activeDomains, inactiveDomains]
+ */
+function parallelDnsCheck(array $domains, $concurrency = 10) {
+    $active = [];
+    $inactive = [];
+    $childPids = []; // Mapping pid => domain
+
+    foreach ($domains as $domain) {
+        // Enforce concurrency limit: wait until there's room.
+        while (count($childPids) >= $concurrency) {
+            $exitedPid = pcntl_wait($status);
+            if ($exitedPid > 0 && isset($childPids[$exitedPid])) {
+                $exitCode = pcntl_wexitstatus($status);
+                if ($exitCode === 0) {
+                    $active[] = $childPids[$exitedPid];
+                } else {
+                    $inactive[] = $childPids[$exitedPid];
+                }
+                unset($childPids[$exitedPid]);
             }
-        });
+        }
+        // Fork a child process.
+        $pid = pcntl_fork();
+        if ($pid == -1) {
+            // Fork failed; process synchronously as fallback.
+            if (checkdnsrr($domain, 'A')) {
+                $active[] = $domain;
+            } else {
+                $inactive[] = $domain;
+            }
+        } elseif ($pid === 0) {
+            // Child process: perform DNS check and exit with code 0 (active) or 1 (inactive)
+            if (checkdnsrr($domain, 'A')) {
+                exit(0);
+            } else {
+                exit(1);
+            }
+        } else {
+            // Parent process: record child PID and associated domain.
+            $childPids[$pid] = $domain;
+        }
     }
-    $results = yield all($promises);
-    foreach ($results as $domain => $isWorking) {
-        if ($isWorking) {
+    // Wait for any remaining child processes.
+    while (count($childPids) > 0) {
+        $exitedPid = pcntl_wait($status);
+        if ($exitedPid > 0 && isset($childPids[$exitedPid])) {
+            $exitCode = pcntl_wexitstatus($status);
+            if ($exitCode === 0) {
+                $active[] = $childPids[$exitedPid];
+            } else {
+                $inactive[] = $childPids[$exitedPid];
+            }
+            unset($childPids[$exitedPid]);
+        }
+    }
+    return [$active, $inactive];
+}
+
+// Use parallel DNS checking if PCNTL is available.
+if (function_exists('pcntl_fork')) {
+    list($activeDomains, $inactiveDomains) = parallelDnsCheck($newDomains, 10);
+} else {
+    // Fallback: synchronous DNS check.
+    foreach ($newDomains as $domain) {
+        if (checkdnsrr($domain, 'A')) {
             $activeDomains[] = $domain;
         } else {
             $inactiveDomains[] = $domain;
         }
     }
-});
+}
 
 /*
  * 5. Build final domain lists.
@@ -192,7 +236,7 @@ Loop::run(function () use ($newDomains, &$activeDomains, &$inactiveDomains) {
 $finalActiveDomains = array_values(array_unique(array_merge($prevActiveDomains, $activeDomains)));
 $finalInactiveDomains = array_values(array_unique(array_merge($prevInactiveDomains, $inactiveDomains)));
 
-// Write updated lists.
+// Write the updated lists to the respective files.
 file_put_contents($activeFile, implode("\n", $finalActiveDomains));
 file_put_contents($inactiveFile, implode("\n", $finalInactiveDomains));
 
