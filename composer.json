@@ -1,6 +1,6 @@
 {
   "require": {
-    "amphp/amp": "^3.0",
+    "amphp/amp": "^2.0",
     "amphp/dns": "1.x-dev@dev"
   },
   "minimum-stability": "dev",
