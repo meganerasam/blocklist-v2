@@ -20,4 +20,6 @@ jobs:
 
       - name: Run the domain update script
         run: php update_domains.php
-        
+
+      - name: Retest existing working domains
+        run: php retest_domains.php
