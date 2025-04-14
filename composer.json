@@ -1,7 +1,7 @@
 {
   "require": {
     "amphp/amp": "2.6.4",
-    "amphp/dns": "1.x-dev@dev"
+    "amphp/dns": "2.x-dev@dev"
   },
   "minimum-stability": "dev",
   "prefer-stable": true,
