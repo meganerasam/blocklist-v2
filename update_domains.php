@@ -2,13 +2,18 @@
 /**
  * This script aggregates domain data from various remote sources,
  * normalizes and filters them (excluding any already known domains),
- * tests each domain via DNS, and writes the active and inactive domains
- * to separate files stored in the repository.
+ * tests each domain via asynchronous DNS queries (using Amp),
+ * and writes the active and inactive domains to separate files stored in the repository.
  * 
  * The final files will be available at:
  *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/working_domains.txt
  *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/inactive_domains.txt
+ *
+ * Note: This version uses Amp for asynchronous DNS checks. Make sure to install the required dependencies:
+ *   composer require amphp/dns amphp/amp
  */
+
+require __DIR__ . '/vendor/autoload.php'; // Load Composer autoloader
 
 // Enable error reporting (adjust for production)
 error_reporting(E_ALL);
@@ -24,7 +29,7 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 
 // Define source URLs
 
-// TXT domain lists
+// In this example, we'll only process CSV sources. You can uncomment or add TXT URLs as needed.
 // $txtUrls = [
 //     'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
 //     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
@@ -60,13 +65,6 @@ function normalizeDomain($domain) {
     // Remove any trailing slash
     $domain = rtrim($domain, '/');
     return $domain;
-}
-
-/**
- * Check if a domain is working by verifying a DNS A record.
- */
-function isDomainWorking($domain) {
-    return checkdnsrr($domain, 'A');
 }
 
 // Container for new domains retrieved from sources
@@ -153,17 +151,45 @@ $newDomains = array_diff($newDomains, $whitelistDomains);
 $newDomains = array_values(array_unique($newDomains));
 
 /*
- * 4. DNS Check: Classify new domains as active or inactive.
+ * 4. Asynchronous DNS Check using Amp:
+ * Classify new domains as active or inactive by performing concurrent DNS lookups.
  */
+use Amp\Loop;
+use Amp\Dns;
+use Amp\Promise;
+use function Amp\call;
+use function Amp\Promise\all;
+
 $activeDomains = [];
 $inactiveDomains = [];
-foreach ($newDomains as $domain) {
-    if (isDomainWorking($domain)) {
-        $activeDomains[] = $domain;
-    } else {
-        $inactiveDomains[] = $domain;
+
+// Run the asynchronous event loop.
+Loop::run(function () use ($newDomains, &$activeDomains, &$inactiveDomains) {
+    // Create an array of promises, one per domain.
+    $promises = [];
+    foreach ($newDomains as $domain) {
+        // For each domain, create a promise that resolves to true (working) or false (inactive).
+        $promises[$domain] = call(function () use ($domain) {
+            try {
+                // Amp's DNS query returns an array of records on success.
+                yield Dns\query($domain, 'A');
+                return true;
+            } catch (\Throwable $e) {
+                return false;
+            }
+        });
     }
-}
+    // Wait for all the promises to resolve.
+    $results = yield all($promises);
+    // Classify domains based on the result.
+    foreach ($results as $domain => $isWorking) {
+        if ($isWorking) {
+            $activeDomains[] = $domain;
+        } else {
+            $inactiveDomains[] = $domain;
+        }
+    }
+});
 
 /*
  * 5. Build final domain lists.
@@ -176,42 +202,8 @@ $finalInactiveDomains = array_values(array_unique(array_merge($prevInactiveDomai
 file_put_contents($activeFile, implode("\n", $finalActiveDomains));
 file_put_contents($inactiveFile, implode("\n", $finalInactiveDomains));
 
-/*
- * 6. Output the current working domains in one of several formats.
- */
-// $format = isset($_GET['format']) ? $_GET['format'] : "1";
-// $randomCount = isset($_GET['random']) ? intval($_GET['random']) : 0;
-// // By default, output the final active domains.
-// $outputDomains = $finalActiveDomains;
-// if ($randomCount > 0 && $randomCount < count($outputDomains)) {
-//     shuffle($outputDomains);
-//     $outputDomains = array_slice($outputDomains, 0, $randomCount);
-// }
-
-// switch ($format) {
-//     case "1":
-//         header('Content-Type: text/plain');
-//         $total = count($outputDomains);
-//         foreach ($outputDomains as $index => $domain) {
-//             echo '"' . $domain . '"';
-//             echo ($index === $total - 1) ? "\n" : ",\n";
-//         }
-//         break;
-//     case "2":
-//         $result = [];
-//         foreach ($outputDomains as $domain) {
-//             $result[] = ["redirect" => $domain];
-//         }
-//         header('Content-Type: application/json');
-//         echo json_encode($result, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-//         break;
-//     case "3":
-//         header('Content-Type: application/json');
-//         echo json_encode($outputDomains, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-//         break;
-//     default:
-//         header('Content-Type: text/plain');
-//         echo "Invalid format specified. Use format=1, format=2, or format=3.";
-//         break;
-// }
+// Optionally output a summary
+echo "DNS Check Completed.\n";
+echo "New active domains: " . count($activeDomains) . "\n";
+echo "New inactive domains: " . count($inactiveDomains) . "\n";
 ?>
