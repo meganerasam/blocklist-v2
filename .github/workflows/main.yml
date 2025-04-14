@@ -20,18 +20,4 @@ jobs:
 
       - name: Run the domain update script
         run: php update_domains.php
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Commit and push changes if any
-        run: |
-          git add working_domains.txt inactive_domains.txt
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Update domain lists $(date '+%Y-%m-%d %H:%M')"
-            git push
-          else
-            echo "No changes detected."
-          fi
+        
