@@ -86107,3 +86107,5 @@ onet.grupapocztowa.top
 onet.konto-poczta.top
 onet.weryfikacjakonto.top
 openvista.run
+pomoc.grupaochrony.top
+pomoc.pocztowy.top
