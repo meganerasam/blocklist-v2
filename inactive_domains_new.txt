@@ -86010,3 +86010,5 @@ ads7.gamecity.net
 adserver.pl
 advariant.com
 clicktag.de
+go-clicks.de
+megacash.de
