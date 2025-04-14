@@ -37,7 +37,8 @@ $txtUrls = [
     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
     'https://v.firebog.net/hosts/AdguardDNS.txt',
     'https://v.firebog.net/hosts/Admiral.txt',
-    'https://v.firebog.net/hosts/Easylist.txt'
+    'https://v.firebog.net/hosts/Easylist.txt',
+    'https://raw.githubusercontent.com/StevenBlack/hosts/refs/heads/master/data/KADhosts/hosts'
 ];
 
 // Whitelist URLs (using GitHub raw URLs)
