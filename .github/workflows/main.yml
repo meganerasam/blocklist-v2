@@ -18,9 +18,11 @@ jobs:
         with:
           php-version: '8.0'  # Change version if needed.
 
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist
+
       - name: Run the domain update script
-        run: |
-          php update_domains.php
+        run: php update_domains.php
 
       - name: Configure Git
         run: |
