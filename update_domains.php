@@ -39,7 +39,9 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 //     'https://v.firebog.net/hosts/Easylist.txt',
 //     'https://raw.githubusercontent.com/StevenBlack/hosts/refs/heads/master/data/KADhosts/hosts'
 // ];
-$txtUrls = [];  // Currently not in use
+$txtUrls = [
+    'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext'
+];
 
 // Whitelist URLs (using GitHub raw URLs)
 $txtUrlsWhitelist = [
