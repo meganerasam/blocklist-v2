@@ -36,7 +36,8 @@ $txtUrls = [
     'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
     'https://v.firebog.net/hosts/AdguardDNS.txt',
-    'https://v.firebog.net/hosts/Admiral.txt'
+    'https://v.firebog.net/hosts/Admiral.txt',
+    'https://v.firebog.net/hosts/Easylist.txt'
 ];
 
 // Whitelist URLs (using GitHub raw URLs)
@@ -265,7 +266,7 @@ foreach ($batches as $batchIndex => $batch) {
     exec("git config user.name 'github-actions[bot]'");
     exec("git config user.email 'github-actions[bot]@users.noreply.github.com'");
     $lastDomain = end($batch);
-    $commitMessage = "Incremental update: Processed batch " . ($batchIndex + 1) . " up to domain " . $lastDomain . " (" . date('Y-m-d H:i') . ")";
+    $commitMessage = "Incremental update: Processed batch " . ($batchIndex + 1) . " out of " . count($batches) . " (" . date('Y-m-d H:i') . ")";
     exec("git commit -m " . escapeshellarg($commitMessage));
     exec("git push");
     echo "Batch " . ($batchIndex + 1) . " committed.\n";
