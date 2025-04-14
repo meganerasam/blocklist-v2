@@ -41,7 +41,8 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 // ];
 $txtUrls = [
     'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
-    'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext'
+    'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
+    'https://v.firebog.net/hosts/AdguardDNS.txt'
 ];
 
 // Whitelist URLs (using GitHub raw URLs)
@@ -149,6 +150,9 @@ $newDomains = array_diff($newDomains, $whitelistDomains);
 // Remove duplicates and reindex.
 $newDomains = array_values(array_unique($newDomains));
 
+echo "Fetched " . count($newDomains) . " new domains.\n";
+flush();
+
 /*
  * 4. DNS Check (Parallel using PCNTL if available).
  */
@@ -166,8 +170,16 @@ function parallelDnsCheck(array $domains, $concurrency = 10) {
     $active = [];
     $inactive = [];
     $childPids = []; // Mapping pid => domain
+    $counter = 0;    // Initialize a counter
 
     foreach ($domains as $domain) {
+        $counter++;
+        // Every 100 domains processed, print a progress message.
+        if ($counter % 100 === 0) {
+            echo "Processed $counter domains so far.\n";
+            flush();
+        }
+
         // Enforce concurrency limit: wait until there's room.
         while (count($childPids) >= $concurrency) {
             $exitedPid = pcntl_wait($status);
@@ -246,3 +258,5 @@ file_put_contents($inactiveFile, implode("\n", $finalInactiveDomains));
 echo "DNS Check Completed.\n";
 echo "New active domains: " . count($activeDomains) . "\n";
 echo "New inactive domains: " . count($inactiveDomains) . "\n";
+echo "Total active domains: " . count($finalActiveDomains) . "\n";
+echo "Total inactive domains: " . count($finalInactiveDomains) . "\n";
