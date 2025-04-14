@@ -40,6 +40,7 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 //     'https://raw.githubusercontent.com/StevenBlack/hosts/refs/heads/master/data/KADhosts/hosts'
 // ];
 $txtUrls = [
+    'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext'
 ];
 
