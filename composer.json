@@ -2,5 +2,12 @@
   "require": {
     "amphp/amp": "^3.0",
     "amphp/dns": "^1.4"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "config": {
+    "platform": {
+      "php": "8.1.0"
+    }
   }
 }

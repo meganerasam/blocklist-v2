@@ -2,18 +2,18 @@
 /**
  * This script aggregates domain data from various remote sources,
  * normalizes and filters them (excluding any already known domains),
- * tests each domain via asynchronous DNS queries (using Amp),
+ * tests each domain via asynchronous DNS queries using Amp,
  * and writes the active and inactive domains to separate files stored in the repository.
- * 
+ *
  * The final files will be available at:
  *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/working_domains.txt
  *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/inactive_domains.txt
  *
- * Note: This version uses Amp for asynchronous DNS checks. Make sure to install the required dependencies:
- *   composer require amphp/dns amphp/amp
+ * Dependencies:
+ *   Run "composer install" to install required packages.
  */
 
-require __DIR__ . '/vendor/autoload.php'; // Load Composer autoloader
+require __DIR__ . '/vendor/autoload.php'; // Composer autoloader
 
 // Enable error reporting (adjust for production)
 error_reporting(E_ALL);
@@ -29,7 +29,7 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 
 // Define source URLs
 
-// In this example, we'll only process CSV sources. You can uncomment or add TXT URLs as needed.
+// TXT domain lists (currently commented out; add URLs if needed)
 // $txtUrls = [
 //     'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
 //     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
@@ -40,7 +40,7 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 // ];
 $txtUrls = [];
 
-// Whitelist URLs (use GitHub raw URLs for direct content)
+// Whitelist URLs (using GitHub raw URLs)
 $txtUrlsWhitelist = [
     'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes.txt',
     'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes2.txt'
@@ -60,7 +60,7 @@ function normalizeDomain($domain) {
     $domain = trim($domain);
     $domain = str_replace('"', '', $domain);
     $domain = rtrim($domain, ',');
-    // Remove http:// or https://
+    // Remove http:// or https:// (case-insensitive)
     $domain = preg_replace('/^https?:\/\//i', '', $domain);
     // Remove any trailing slash
     $domain = rtrim($domain, '/');
@@ -86,7 +86,7 @@ foreach ($txtUrls as $txtUrl) {
             continue;
         }
         $domain = normalizeDomain($line);
-        // Only add if not already in the previous active or inactive lists.
+        // Only add if not already in previous active/inactive lists.
         if (!in_array($domain, $prevActiveDomains) && !in_array($domain, $prevInactiveDomains)) {
             $newDomains[] = $domain;
         }
@@ -110,7 +110,7 @@ foreach ($csvUrls as $csvUrl) {
     if (count($rows) < 1) {
         die("Error: CSV data is empty or invalid.");
     }
-    // Assume first row is headers.
+    // Assume the first row is headers.
     $headers = array_shift($rows);
     $colIndex = array_search("Block List v3", $headers);
     if ($colIndex === false) {
@@ -145,33 +145,29 @@ foreach ($txtUrlsWhitelist as $txtUrl) {
         $whitelistDomains[] = normalizeDomain($line);
     }
 }
-// Remove any whitelisted domains from the newly fetched domains.
+// Remove whitelisted domains.
 $newDomains = array_diff($newDomains, $whitelistDomains);
-// Remove duplicates and reindex.
+// Remove duplicates.
 $newDomains = array_values(array_unique($newDomains));
 
 /*
- * 4. Asynchronous DNS Check using Amp:
- * Classify new domains as active or inactive by performing concurrent DNS lookups.
+ * 4. DNS Check: Asynchronous lookup using Amp.
  */
 use Amp\Loop;
 use Amp\Dns;
-use Amp\Promise;
 use function Amp\call;
 use function Amp\Promise\all;
 
 $activeDomains = [];
 $inactiveDomains = [];
 
-// Run the asynchronous event loop.
+// Run asynchronous event loop.
 Loop::run(function () use ($newDomains, &$activeDomains, &$inactiveDomains) {
-    // Create an array of promises, one per domain.
     $promises = [];
     foreach ($newDomains as $domain) {
-        // For each domain, create a promise that resolves to true (working) or false (inactive).
         $promises[$domain] = call(function () use ($domain) {
             try {
-                // Amp's DNS query returns an array of records on success.
+                // Amp’s DNS query returns an array of A records if successful.
                 yield Dns\query($domain, 'A');
                 return true;
             } catch (\Throwable $e) {
@@ -179,9 +175,7 @@ Loop::run(function () use ($newDomains, &$activeDomains, &$inactiveDomains) {
             }
         });
     }
-    // Wait for all the promises to resolve.
     $results = yield all($promises);
-    // Classify domains based on the result.
     foreach ($results as $domain => $isWorking) {
         if ($isWorking) {
             $activeDomains[] = $domain;
@@ -198,12 +192,10 @@ Loop::run(function () use ($newDomains, &$activeDomains, &$inactiveDomains) {
 $finalActiveDomains = array_values(array_unique(array_merge($prevActiveDomains, $activeDomains)));
 $finalInactiveDomains = array_values(array_unique(array_merge($prevInactiveDomains, $inactiveDomains)));
 
-// Write the updated lists to the respective files.
+// Write updated lists.
 file_put_contents($activeFile, implode("\n", $finalActiveDomains));
 file_put_contents($inactiveFile, implode("\n", $finalInactiveDomains));
 
-// Optionally output a summary
 echo "DNS Check Completed.\n";
 echo "New active domains: " . count($activeDomains) . "\n";
 echo "New inactive domains: " . count($inactiveDomains) . "\n";
-?>
