@@ -13,7 +13,7 @@
  *   Run "composer install" to install required packages.
  */
 
-require __DIR__ . '/vendor/autoload.php'; // Composer autoloader
+require __DIR__ . '/vendor/autoload.php'; // Load Composer autoloader
 
 // Enable error reporting (adjust for production)
 error_reporting(E_ALL);
@@ -29,7 +29,7 @@ $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGN
 
 // Define source URLs
 
-// TXT domain lists (currently commented out; add URLs if needed)
+// TXT domain lists (currently commented out; add URLs as needed)
 // $txtUrls = [
 //     'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
 //     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
@@ -167,7 +167,7 @@ Loop::run(function () use ($newDomains, &$activeDomains, &$inactiveDomains) {
     foreach ($newDomains as $domain) {
         $promises[$domain] = call(function () use ($domain) {
             try {
-                // Amp’s DNS query returns an array of A records if successful.
+                // Amp's DNS query returns an array of A records if successful.
                 yield Dns\query($domain, 'A');
                 return true;
             } catch (\Throwable $e) {
