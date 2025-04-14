@@ -24298,3 +24298,5 @@ smetrics.chron.com
 smetrics.expressnews.com
 smetrics.greenstate.com
 smetrics.lmtonline.com
+smetrics.mysanantonio.com
+smetrics.sfchronicle.com
