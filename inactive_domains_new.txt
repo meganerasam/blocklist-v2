@@ -86259,3 +86259,5 @@ pomoc.potwierdzenie-danych.top
 pomoc.konto-weryfikacja.top
 pomoc.potwierdzenie-konta.top
 pomoc.grupa-ochrony.top
+potwierdzenie-konta.top
+renewal-media.com
