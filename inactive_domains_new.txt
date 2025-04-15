@@ -86252,3 +86252,10 @@ olx-pl.volgika.life
 olx.viard.today
 onet.pocztowy.top
 onet.administrator-serwisu.top
+pocztowa-grupa.top
+polandgrupapocztowa.top
+pomoc.wp-konta.top
+pomoc.potwierdzenie-danych.top
+pomoc.konto-weryfikacja.top
+pomoc.potwierdzenie-konta.top
+pomoc.grupa-ochrony.top
