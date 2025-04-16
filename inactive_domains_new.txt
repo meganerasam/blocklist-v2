@@ -86325,3 +86325,4 @@ marketing.tllms.com
 affx2go.com
 track.nextsmart.me
 dsp.api.vungle.com
+qa2.bfmio.com
