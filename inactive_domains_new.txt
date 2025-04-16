@@ -86451,3 +86451,5 @@ bigotka.pl
 pianka.shop
 slodki.shop
 www.bigotka.pl
+www.pianka.shop
+www.slodki.shop
