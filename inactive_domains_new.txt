@@ -96012,3 +96012,5 @@ krys.shop
 motyl.shop
 spodnice.shop
 www.krys.shop
+www.motyl.shop
+www.spodnice.shop
