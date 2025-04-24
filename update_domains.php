@@ -24,10 +24,12 @@ ini_set('display_errors', 1);
 // File paths (stored locally in the repository)
 $activeFile   = __DIR__ . '/working_domains.txt';
 $inactiveFile = __DIR__ . '/inactive_domains.txt';
+$activeFileRecent   = __DIR__ . '/working_domains_20250416.txt';
 
 // Load previously stored active and inactive domains (if available)
 $prevActiveDomains   = file_exists($activeFile) ? file($activeFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [];
 $prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [];
+$prevActiveDomainsRecent   = file_exists($activeFileRecent) ? file($activeFileRecent, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [];
 
 // Define source URLs
 
@@ -150,7 +152,7 @@ echo "Fetched " . count($newDomains) . " new domains.\n";
 flush();
 
 // Partition newDomains into batches of 1000.
-$batchSize = 1000;
+$batchSize = 2500;
 $batches = array_chunk($newDomains, $batchSize);
 
 echo "Processing in " . count($batches) . " batches (batch size: $batchSize).\n";
@@ -168,7 +170,7 @@ function parallelDnsCheck(array $domains, $concurrency = 10) {
     foreach ($domains as $domain) {
         $counter++;
         // Print progress within the batch every 100 domains.
-        if ($counter % 100 === 0) {
+        if ($counter % 1000 === 0) {
             echo "Processed $counter domains in current batch.\n";
             flush();
         }
@@ -259,11 +261,12 @@ foreach ($batches as $batchIndex => $batch) {
     // Write updated lists to files.
     file_put_contents($activeFile, implode("\n", $totalActive));
     file_put_contents($inactiveFile, implode("\n", $totalInactive));
+    file_put_contents($activeFileRecent, implode("\n", $totalActive));
 
     // Commit changes incrementally for this batch.
     echo "Committing batch " . ($batchIndex + 1) . " results...\n";
     flush();
-    exec("git add " . escapeshellarg($activeFile) . " " . escapeshellarg($inactiveFile));
+    exec("git add " . escapeshellarg($activeFile) . " " . escapeshellarg($inactiveFile) . " " . escapeshellarg($activeFileRecent));
     exec("git config user.name 'github-actions[bot]'");
     exec("git config user.email 'github-actions[bot]@users.noreply.github.com'");
     $lastDomain = end($batch);
