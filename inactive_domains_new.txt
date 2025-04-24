@@ -100040,3 +100040,14 @@ data-45ccb8748c.focus.de
 data-45ccb8748c.chip.de
 data-45ccb8748c.bestcheck.de
 data-4713ae37a2.apps.iocnt.de
+data-574debde52.focus.de
+data-574debde52.bunte.de
+data-5582f489be.apps.iocnt.de
+data-5c4fb438f7.apps.iocnt.de
+data-5bf0fdacd2.apps.iocnt.de
+data-7294bdf136.chip.de
+data-7294bdf136.cardscout.de
+data-7294bdf136.focus.de
+data-8ec1348702.apps.iocnt.de
+data-9b3233a086.focus.de
+data-9b3233a086.bunte.de
