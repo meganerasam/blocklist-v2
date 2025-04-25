@@ -2,38 +2,36 @@
 /**
  * update_domains.php
  *
- * This script aggregates domain data from various remote sources,
- * normalizes and filters them (excluding any already known domains),
- * tests each domain via DNS queries in parallel using PCNTL,
- * and writes the active and inactive domains to separate files stored
- * in the repository.
+ * Aggregates domain data from various sources, DNS-checks them in parallel,
+ * updates:
+ *   - working_domains.txt          (full active list)
+ *   - inactive_domains.txt         (full inactive list)
+ *   - working_domains_YYYYMMDD.txt (only the new active domains this run)
  *
- * The final files will be available at:
- *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/working_domains.txt
- *  - https://raw.githubusercontent.com/meganerasam/blocklist-v2/main/inactive_domains.txt
- *
- * This version does not rely on Composer/third‑party packages.
- * It uses PHP's built‑in PCNTL functions for parallel processing and commits
- * changes incrementally (every 1000 domains) so that progress is saved.
+ * Commits each batch incrementally to preserve progress.
  */
 
-// Enable error reporting for debugging (adjust as needed)
+// Enable error reporting
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// File paths (stored locally in the repository)
-$activeFile   = __DIR__ . '/working_domains.txt';
-$inactiveFile = __DIR__ . '/inactive_domains.txt';
-$activeFileRecent   = __DIR__ . '/working_domains_20250416.txt';
+// File paths
+$activeFile           = __DIR__ . '/working_domains.txt';
+$inactiveFile         = __DIR__ . '/inactive_domains.txt';
+$activeFileRecent     = __DIR__ . "/working_domains_20250416.txt";
 
-// Load previously stored active and inactive domains (if available)
-$prevActiveDomains   = file_exists($activeFile) ? file($activeFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [];
-$prevInactiveDomains = file_exists($inactiveFile) ? file($inactiveFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [];
-$prevActiveDomainsRecent   = file_exists($activeFileRecent) ? file($activeFileRecent, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : [];
+// Load existing lists
+$prevActiveDomains       = file_exists($activeFile)
+    ? file($activeFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+    : [];
+$prevInactiveDomains     = file_exists($inactiveFile)
+    ? file($inactiveFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+    : [];
+$prevActiveDomainsRecent = file_exists($activeFileRecent)
+    ? file($activeFileRecent, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+    : [];
 
-// Define source URLs
-
-// TXT domain lists – uncomment or add as needed
+// Source URLs
 $txtUrls = [
     'https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt',
     'https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
@@ -42,249 +40,195 @@ $txtUrls = [
     'https://v.firebog.net/hosts/Easylist.txt',
     'https://raw.githubusercontent.com/StevenBlack/hosts/refs/heads/master/data/KADhosts/hosts'
 ];
-
-// Whitelist URLs (using GitHub raw URLs)
-$txtUrlsWhitelist = [
+$txtWhitelist = [
     'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes.txt',
     'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes2.txt'
 ];
-
-// CSV domain lists
 $csvUrls = [
     'https://raw.githubusercontent.com/meganerasam/blocklist/main/blocklist.csv'
 ];
 
-/**
- * Normalize a domain string by removing IP prefixes, quotes, URL schemes, and trailing slashes.
- */
-function normalizeDomain($domain) {
-    $domain = preg_replace('/^(0\.0\.0\.0|127\.0\.0\.1)\s+/', '', $domain);
+// Normalize a domain
+function normalizeDomain(string $domain): string {
+    $domain = preg_replace('/^(0\.0\.0\.0|127\.0\.0\.1|\|\|)\s*/', '', $domain);
     $domain = trim($domain);
     $domain = str_replace('"', '', $domain);
     $domain = rtrim($domain, ',');
     $domain = preg_replace('/^https?:\/\//i', '', $domain);
-    $domain = rtrim($domain, '/');
-    return $domain;
+    return rtrim($domain, '/');
 }
 
-// Container for new domains retrieved from sources
+// 1. Gather new candidate domains
 $newDomains = [];
 
-/*
- * 1. Fetch TXT source domains.
- */
-foreach ($txtUrls as $txtUrl) {
-    $txtContent = file_get_contents($txtUrl);
-    if ($txtContent === false) {
-        die("Error: Unable to fetch TXT data from $txtUrl.\n");
-    }
-    $lines = explode("\n", $txtContent);
-    foreach ($lines as $line) {
+// TXT sources
+foreach ($txtUrls as $url) {
+    $content = @file_get_contents($url);
+    if ($content === false) continue;
+    foreach (explode("\n", $content) as $line) {
         $line = trim($line);
-        if ($line === '' || strpos($line, '#') === 0) {
-            continue;
-        }
-        $domain = normalizeDomain($line);
-        // Only add if not already in previous active or inactive lists.
-        if (!in_array($domain, $prevActiveDomains) && !in_array($domain, $prevInactiveDomains)) {
-            $newDomains[] = $domain;
+        if ($line === '' || strpos($line, '#') === 0) continue;
+        $d = normalizeDomain($line);
+        if ($d !== '' &&
+            !in_array($d, $prevActiveDomains, true) &&
+            !in_array($d, $prevInactiveDomains, true)
+        ) {
+            $newDomains[] = $d;
         }
     }
 }
 
-/*
- * 2. Fetch CSV source domains.
- */
-foreach ($csvUrls as $csvUrl) {
-    $csvContent = file_get_contents($csvUrl);
-    if ($csvContent === false) {
-        die("Error: Unable to fetch CSV data from $csvUrl.\n");
-    }
-    $lines = explode("\n", $csvContent);
-    $rows = [];
-    foreach ($lines as $line) {
-        if (trim($line) === '') continue;
-        $rows[] = str_getcsv($line);
-    }
-    if (count($rows) < 1) {
-        die("Error: CSV data is empty or invalid.\n");
-    }
+// CSV sources
+foreach ($csvUrls as $url) {
+    $content = @file_get_contents($url);
+    if ($content === false) continue;
+    $rows = array_map('str_getcsv', explode("\n", $content));
+    if (count($rows) < 2) continue;
     $headers = array_shift($rows);
-    $colIndex = array_search("Block List v3", $headers);
-    if ($colIndex === false) {
-        die("Error: 'Block List v3' column not found in CSV.\n");
-    }
+    $idx = array_search('Block List v3', $headers, true);
+    if ($idx === false) continue;
     foreach ($rows as $row) {
-        $domain = normalizeDomain($row[$colIndex]);
-        if ($domain === '' || $domain === "Grand Total") {
-            continue;
-        }
-        if (!in_array($domain, $prevActiveDomains) && !in_array($domain, $prevInactiveDomains)) {
-            $newDomains[] = $domain;
+        if (empty($row[$idx]) || $row[$idx] === 'Grand Total') continue;
+        $d = normalizeDomain($row[$idx]);
+        if ($d !== '' &&
+            !in_array($d, $prevActiveDomains, true) &&
+            !in_array($d, $prevInactiveDomains, true)
+        ) {
+            $newDomains[] = $d;
         }
     }
 }
 
-/*
- * 3. Fetch and normalize whitelist domains.
- */
-$whitelistDomains = [];
-foreach ($txtUrlsWhitelist as $txtUrl) {
-    $txtContent = file_get_contents($txtUrl);
-    if ($txtContent === false) {
-        die("Error: Unable to fetch TXT data from $txtUrl.\n");
-    }
-    $lines = explode("\n", $txtContent);
-    foreach ($lines as $line) {
+// Whitelist filter
+$whitelist = [];
+foreach ($txtWhitelist as $url) {
+    $content = @file_get_contents($url);
+    if ($content === false) continue;
+    foreach (explode("\n", $content) as $line) {
         $line = trim($line);
-        if ($line === '' || strpos($line, '#') === 0) {
-            continue;
-        }
-        $whitelistDomains[] = normalizeDomain($line);
+        if ($line === '' || strpos($line, '#') === 0) continue;
+        $whitelist[] = normalizeDomain($line);
     }
 }
-// Remove whitelisted domains from newDomains.
-$newDomains = array_diff($newDomains, $whitelistDomains);
-// Remove duplicates and reindex.
-$newDomains = array_values(array_unique($newDomains));
+$newDomains = array_values(array_unique(array_diff($newDomains, $whitelist)));
 
-echo "Fetched " . count($newDomains) . " new domains.\n";
-flush();
+echo "Found " . count($newDomains) . " new candidate domains.\n"; flush();
 
-// Partition newDomains into batches of 1000.
+// Partition into batches
 $batchSize = 2500;
-$batches = array_chunk($newDomains, $batchSize);
+$batches   = array_chunk($newDomains, $batchSize);
 
-echo "Processing in " . count($batches) . " batches (batch size: $batchSize).\n";
-flush();
+echo "Processing " . count($batches) . " batches of up to $batchSize domains each.\n"; flush();
 
-/*
- * 4. Define a function for parallel DNS checking using PCNTL.
+/**
+ * Performs parallel DNS checks via pcntl_fork.
+ * Returns [activeDomains, inactiveDomains].
  */
-function parallelDnsCheck(array $domains, $concurrency = 10) {
+function parallelDnsCheck(array $domains, int $concurrency = 10): array {
     $active = [];
     $inactive = [];
-    $childPids = []; // Mapping pid => domain
-    $counter = 0;    // Counter within this batch
+    $pids = [];
+    $count = 0;
 
-    foreach ($domains as $domain) {
-        $counter++;
-        // Print progress within the batch every 100 domains.
-        if ($counter % 1000 === 0) {
-            echo "Processed $counter domains in current batch.\n";
-            flush();
+    foreach ($domains as $d) {
+        $count++;
+        if ($count % 1000 === 0) {
+            echo "  Checked $count in batch\n"; flush();
         }
-
-        // Enforce concurrency limit.
-        while (count($childPids) >= $concurrency) {
-            $exitedPid = pcntl_wait($status);
-            if ($exitedPid > 0 && isset($childPids[$exitedPid])) {
-                $exitCode = pcntl_wexitstatus($status);
-                if ($exitCode === 0) {
-                    $active[] = $childPids[$exitedPid];
-                } else {
-                    $inactive[] = $childPids[$exitedPid];
-                }
-                unset($childPids[$exitedPid]);
+        // throttle
+        while (count($pids) >= $concurrency) {
+            $ended = pcntl_wait($status);
+            if ($ended > 0 && isset($pids[$ended])) {
+                $code = pcntl_wexitstatus($status);
+                ($code === 0 ? $active[] : $inactive[]) = $pids[$ended];
+                unset($pids[$ended]);
             }
         }
-        // Fork a child process.
         $pid = pcntl_fork();
-        if ($pid == -1) {
-            // Fork failed: fallback synchronous check.
-            if (checkdnsrr($domain, 'A')) {
-                $active[] = $domain;
-            } else {
-                $inactive[] = $domain;
-            }
+        if ($pid === -1) {
+            // fallback
+            if (checkdnsrr($d, 'A')) $active[] = $d;
+            else                     $inactive[] = $d;
         } elseif ($pid === 0) {
-            // Child process: perform DNS check.
-            if (checkdnsrr($domain, 'A')) {
-                exit(0);
-            } else {
-                exit(1);
-            }
+            exit(checkdnsrr($d, 'A') ? 0 : 1);
         } else {
-            // Parent: record child PID.
-            $childPids[$pid] = $domain;
+            $pids[$pid] = $d;
         }
     }
-    // Wait for remaining children.
-    while (count($childPids) > 0) {
-        $exitedPid = pcntl_wait($status);
-        if ($exitedPid > 0 && isset($childPids[$exitedPid])) {
-            $exitCode = pcntl_wexitstatus($status);
-            if ($exitCode === 0) {
-                $active[] = $childPids[$exitedPid];
-            } else {
-                $inactive[] = $childPids[$exitedPid];
-            }
-            unset($childPids[$exitedPid]);
+    while (count($pids) > 0) {
+        $ended = pcntl_wait($status);
+        if ($ended > 0 && isset($pids[$ended])) {
+            $code = pcntl_wexitstatus($status);
+            ($code === 0 ? $active[] : $inactive[]) = $pids[$ended];
+            unset($pids[$ended]);
         }
     }
     return [$active, $inactive];
 }
 
-/*
- * 5. Process each batch.
- * For each batch, run the DNS check, merge results with previously stored domains,
- * update files, and commit changes.
- */
+// Initialize totals
 $totalActive   = $prevActiveDomains;
 $totalInactive = $prevInactiveDomains;
 
-foreach ($batches as $batchIndex => $batch) {
-    echo "Processing batch " . ($batchIndex + 1) . " of " . count($batches) . " (" . count($batch) . " domains)...\n";
-    flush();
-
-    if (function_exists('pcntl_fork')) {
-        list($batchActive, $batchInactive) = parallelDnsCheck($batch, 10);
-    } else {
-        // Fallback: synchronous checking.
-        $batchActive = [];
-        $batchInactive = [];
-        foreach ($batch as $domain) {
-            if (checkdnsrr($domain, 'A')) {
-                $batchActive[] = $domain;
-            } else {
-                $batchInactive[] = $domain;
-            }
-        }
-    }
-    echo "Batch " . ($batchIndex + 1) . " completed: " . count($batchActive) . " active, " . count($batchInactive) . " inactive.\n";
-    flush();
-
-    // Merge the new batch results with cumulative results.
-    $totalActive   = array_values(array_unique(array_merge($totalActive, $batchActive)));
-    $totalInactive = array_values(array_unique(array_merge($totalInactive, $batchInactive)));
-
-    // Write updated lists to files.
-    file_put_contents($activeFile, implode("\n", $totalActive));
-    file_put_contents($inactiveFile, implode("\n", $totalInactive));
-    file_put_contents($activeFileRecent, implode("\n", $totalActive));
-
-    // Commit changes incrementally for this batch.
-    echo "Committing batch " . ($batchIndex + 1) . " results...\n";
-    flush();
-    exec("git add " . escapeshellarg($activeFile) . " " . escapeshellarg($inactiveFile) . " " . escapeshellarg($activeFileRecent));
-    exec("git config user.name 'github-actions[bot]'");
-    exec("git config user.email 'github-actions[bot]@users.noreply.github.com'");
-    $lastDomain = end($batch);
-    $commitMessage = "Incremental update: Processed batch " . ($batchIndex + 1) . " out of " . count($batches) . " (" . date('Y-m-d H:i') . ")";
-    exec("git commit -m " . escapeshellarg($commitMessage));
-    exec("git push");
-    echo "Batch " . ($batchIndex + 1) . " committed.\n";
-    flush();
-
-    // Optionally update $prevActiveDomains and $prevInactiveDomains for subsequent batches.
-    $prevActiveDomains   = $totalActive;
-    $prevInactiveDomains = $totalInactive;
+// Ensure recent file exists
+if (!file_exists($activeFileRecent)) {
+    file_put_contents($activeFileRecent, "");
 }
 
-echo "DNS Check Completed.\n";
-echo "New active domains (this run): " . (count($totalActive) - count($prevActiveDomains)) . "\n";
-echo "New inactive domains (this run): " . (count($totalInactive) - count($prevInactiveDomains)) . "\n";
-echo "Total active domains: " . count($totalActive) . "\n";
-echo "Total inactive domains: " . count($totalInactive) . "\n";
+// Batch processing
+foreach ($batches as $i => $batch) {
+    $num = $i + 1;
+    echo "Batch $num/" . count($batches) . "\n"; flush();
+
+    if (function_exists('pcntl_fork')) {
+        list($bAct, $bInact) = parallelDnsCheck($batch, 10);
+    } else {
+        $bAct = [];
+        $bInact = [];
+        foreach ($batch as $d) {
+            if (checkdnsrr($d, 'A')) $bAct[] = $d;
+            else                      $bInact[] = $d;
+        }
+    }
+    echo "  Active: " . count($bAct) . "  Inactive: " . count($bInact) . "\n"; flush();
+
+    // Merge full lists
+    $totalActive   = array_values(array_unique(array_merge($totalActive,   $bAct)));
+    $totalInactive = array_values(array_unique(array_merge($totalInactive, $bInact)));
+
+    // Write master lists
+    file_put_contents($activeFile,   implode("\n", $totalActive)   . "\n");
+    file_put_contents($inactiveFile, implode("\n", $totalInactive) . "\n");
+
+    // Compute only newly added for the recent file
+    $newForRecent = array_diff($bAct, $prevActiveDomainsRecent);
+    if (!empty($newForRecent)) {
+        file_put_contents(
+            $activeFileRecent,
+            implode("\n", $newForRecent) . "\n",
+            FILE_APPEND
+        );
+        // Update snapshot so next batch skips these
+        $prevActiveDomainsRecent = array_merge($prevActiveDomainsRecent, $newForRecent);
+    }
+
+    // Commit changes incrementally
+    echo "  Committing batch $num\n"; flush();
+    exec("git add "
+        . escapeshellarg($activeFile)   . " "
+        . escapeshellarg($inactiveFile) . " "
+        . escapeshellarg($activeFileRecent)
+    );
+    exec("git config user.name 'github-actions[bot]'");
+    exec("git config user.email 'github-actions[bot]@users.noreply.github.com'");
+    $msg = "Batch $num/" . count($batches) . " (" . date('Y-m-d H:i') . ")";
+    exec("git commit -m " . escapeshellarg($msg));
+    exec("git push");
+}
+
+// Done
+echo "Update complete: "
+   . count($totalActive) . " total active, "
+   . count($totalInactive) . " total inactive.\n";
 flush();
 ?>
