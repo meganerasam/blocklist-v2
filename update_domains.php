@@ -135,12 +135,16 @@ function parallelDnsCheck(array $domains, int $concurrency = 10): array {
         if ($count % 1000 === 0) {
             echo "  Checked $count in batch\n"; flush();
         }
-        // throttle
-        while (count($pids) >= $concurrency) {
+        // Wait for remaining children
+        while (count($pids) > 0) {
             $ended = pcntl_wait($status);
             if ($ended > 0 && isset($pids[$ended])) {
                 $code = pcntl_wexitstatus($status);
-                ($code === 0 ? $active[] : $inactive[]) = $pids[$ended];
+                if ($code === 0) {
+                    $active[] = $pids[$ended];
+                } else {
+                    $inactive[] = $pids[$ended];
+                }
                 unset($pids[$ended]);
             }
         }
