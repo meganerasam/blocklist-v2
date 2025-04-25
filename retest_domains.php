@@ -16,8 +16,7 @@ ini_set('display_errors', 1);
 // File paths
 $workingFile       = __DIR__ . '/working_domains.txt';
 $inactiveFile      = __DIR__ . '/inactive_domains.txt';
-$dateSuffix        = date('Ymd');  // e.g. "20250416"
-$recentFile        = __DIR__ . "/working_domains_{$dateSuffix}.txt";
+$recentFile        = __DIR__ . "/working_domains_20250416.txt";
 
 // 1. Load existing working domains
 if (!file_exists($workingFile)) {
