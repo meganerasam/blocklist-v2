@@ -23,6 +23,3 @@ jobs:
 
       - name: Retest existing working domains
         run: php retest_domains.php
-
-      - name: Remove inactive domains from recent working_domains file
-        run: php clean_working_domains_files.php
