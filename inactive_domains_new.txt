@@ -105069,3 +105069,6 @@ re-direct.pl
 ln03.tubemogul.com
 kibana.optimonk.com
 phpmyadmin.optimonk.com
+sales.en.acceptance.optimonk.com
+sales.acceptance.optimonk.com
+test.optimonk.com
