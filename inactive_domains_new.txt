@@ -110358,3 +110358,7 @@ sales.en.acceptance.optimonk.com
 sales.acceptance.optimonk.com
 test.optimonk.com
 wix.optimonk.com
+1bcde.com
+timesnow.fitness
+news-speaker.com
+www.news-speaker.com
