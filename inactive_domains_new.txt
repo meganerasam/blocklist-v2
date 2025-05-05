@@ -110356,3 +110356,4 @@ phpmyadmin.optimonk.com
 sales.en.acceptance.optimonk.com
 sales.acceptance.optimonk.com
 test.optimonk.com
+wix.optimonk.com
