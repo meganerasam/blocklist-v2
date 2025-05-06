@@ -112380,3 +112380,9 @@ ln03.tubemogul.com
 logs.adroll.com
 kibana.optimonk.com
 phpmyadmin.optimonk.com
+sdkwebsite.affle.co
+sales.en.acceptance.optimonk.com
+sales.acceptance.optimonk.com
+stats.2mdnsys.com
+static.2mdnsys.com
+test.optimonk.com
