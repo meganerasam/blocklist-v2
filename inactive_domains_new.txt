@@ -114478,3 +114478,5 @@ static.2mdnsys.com
 test.optimonk.com
 wix.optimonk.com
 www.playercdn.com
+1bcde.com
+timesnow.fitness
