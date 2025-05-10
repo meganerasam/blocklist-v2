@@ -114529,3 +114529,6 @@ adlog.flurry.com
 ads.2mdnsys.com
 ads.flurry.com
 analytics.mytvzion.pro
+cfa.2mdnsys.com
+clientapi-reliance.dtignite.com
+copperchickens.com
