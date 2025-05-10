@@ -114545,3 +114545,5 @@ stats.2mdnsys.com
 static.2mdnsys.com
 test.optimonk.com
 tracker.shopclues.com
+wix.optimonk.com
+www.playercdn.com
