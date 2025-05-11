@@ -114555,3 +114555,9 @@ kibana.optimonk.com
 land1.adszx.pro
 moupdate1.kingsoft-office-service.com
 phpmyadmin.optimonk.com
+sdkwebsite.affle.co
+sales.en.acceptance.optimonk.com
+sales.acceptance.optimonk.com
+stats.2mdnsys.com
+static.2mdnsys.com
+test.optimonk.com
