@@ -114724,3 +114724,6 @@ stats.2mdnsys.com
 static.2mdnsys.com
 tangerine.nexage.com
 test.optimonk.com
+video.tapjoy.com
+wix.optimonk.com
+www.playercdn.com
