@@ -114698,3 +114698,9 @@ re-direct.pl
 trknths.com
 wonderlandads.com
 specially4u.net
+adlog.flurry.com
+ads.2mdnsys.com
+ads.flurry.com
+ads.nexage.com
+analytics.mytvzion.pro
+api.flurry.com
