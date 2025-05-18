@@ -117474,3 +117474,6 @@ trk.aduclick.club
 norma-external-collect.meizu.com
 player-aws.adtelligent.com
 securetags.w55c.net
+click.gowadogo.com
+cdn.gowadogo.com
+iap.gowadogo.com
