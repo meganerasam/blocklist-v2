@@ -117477,3 +117477,5 @@ securetags.w55c.net
 click.gowadogo.com
 cdn.gowadogo.com
 iap.gowadogo.com
+m.yap.yahoo.com
+wl7.aimtell.com
