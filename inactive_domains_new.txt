@@ -118744,3 +118744,8 @@ securetags.w55c.net
 click.gowadogo.com
 iap.gowadogo.com
 cdn.gowadogo.com
+api.yohoads.com
+tracking.yohoads.com
+m.yap.yahoo.com
+contehos.com
+wl7.aimtell.com
