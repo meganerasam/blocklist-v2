@@ -120000,3 +120000,11 @@ trk.aduclick.club
 norma-external-collect.meizu.com
 player-aws.adtelligent.com
 securetags.w55c.net
+click.gowadogo.com
+admin.hexcan.com
+publisher.hexcan.com
+advertiser.hexcan.com
+api.hexcan.com
+bcpad34.iad.loc.crwdcntrl.net
+iap.gowadogo.com
+cdn.gowadogo.com
