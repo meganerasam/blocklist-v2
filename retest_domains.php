@@ -107,7 +107,7 @@ function parallelDnsCheck(array $batch, int $concurrency = 10): array {
 }
 
 // 4. Batch processing
-$batchSize    = 2500;
+$batchSize    = 10000;
 $batches      = array_chunk($domains, $batchSize);
 $totalBatches = count($batches);
 echo "Processing in $totalBatches batches (up to $batchSize each)...\n";

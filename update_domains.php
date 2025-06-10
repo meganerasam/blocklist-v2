@@ -115,7 +115,7 @@ $newDomains = array_values(array_unique(array_diff($newDomains, $whitelist)));
 echo "Found " . count($newDomains) . " new candidate domains.\n"; flush();
 
 // Partition into batches
-$batchSize = 2500;
+$batchSize = 5000;
 $batches   = array_chunk($newDomains, $batchSize);
 
 echo "Processing " . count($batches) . " batches of up to $batchSize domains each.\n"; flush();
