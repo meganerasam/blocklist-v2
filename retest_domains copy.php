@@ -2,43 +2,45 @@
 /**
  * retest_domains.php
  *
- * Usage: php retest_domains.php <chunk_num> <total_chunks>
- * Processes only working_domains_chunk_<chunk_num>.txt
- * Outputs: working_domains_chunk_<chunk_num>_result.txt, inactive_domains_chunk_<chunk_num>_result.txt
+ * This script re-tests all domains in working_domains.txt to ensure they are still active.
+ * It uses parallel DNS queries via PCNTL in batches (to handle large lists, e.g. 300K+ domains).
+ * Domains that fail are removed from the working list and added to inactive_domains.txt.
+ * Afterwards, any domains in the daily recent file (working_domains_YYYYMMDD.txt)
+ * that have become inactive are also pruned out.
  */
 
 // Enable error reporting
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Arguments
-$chunkNum = isset($argv[1]) ? intval($argv[1]) : 1;
-$totalChunks = isset($argv[2]) ? intval($argv[2]) : 1;
-if ($chunkNum < 1 || $totalChunks < 1) {
-    die("Usage: php retest_domains.php <chunk_num> <total_chunks>\n");
-}
-
 // File paths
-$chunkFile    = __DIR__ . "/working_domains_chunk_{$chunkNum}.txt";
-$inactiveFile = __DIR__ . '/inactive_domains.txt';
-$workingOut   = __DIR__ . "/working_domains_chunk_{$chunkNum}_result.txt";
-$inactiveOut  = __DIR__ . "/inactive_domains_chunk_{$chunkNum}_result.txt";
+$workingFile       = __DIR__ . '/working_domains.txt';
+$inactiveFile      = __DIR__ . '/inactive_domains.txt';
+$recentFile        = __DIR__ . "/working_domains_20250416.txt";
 
-// Load domains for this chunk
-if (!file_exists($chunkFile)) {
-    die("Error: $chunkFile not found.\n");
+// 1. Load existing working domains
+if (!file_exists($workingFile)) {
+    die("Error: working_domains.txt not found.\n");
 }
-$domains = file($chunkFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+$domains = file($workingFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 $totalDomains = count($domains);
-echo "Retesting $totalDomains domains from $chunkFile...\n";
+echo "Retesting $totalDomains domains from working_domains.txt...\n";
 flush();
 
-// Load existing inactive domains
+// 2. Load existing inactive domains
 $prevInactive = file_exists($inactiveFile)
     ? file($inactiveFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
     : [];
 
-// Results arrays
+// 3. Prepare temporary files
+$workingTemp  = __DIR__ . '/working_domains_new.txt';
+$inactiveTemp = __DIR__ . '/inactive_domains_new.txt';
+
+// Initialize: empty working temp, preload inactive temp
+file_put_contents($workingTemp, "");
+file_put_contents($inactiveTemp, implode("\n", $prevInactive) . "\n");
+
+// Cumulative arrays
 $finalWorking  = [];
 $finalInactive = $prevInactive;
 
@@ -104,7 +106,7 @@ function parallelDnsCheck(array $batch, int $concurrency = 10): array {
     return [$active, $inactive];
 }
 
-// Batch processing
+// 4. Batch processing
 $batchSize    = 10000;
 $batches      = array_chunk($domains, $batchSize);
 $totalBatches = count($batches);
@@ -140,11 +142,53 @@ foreach ($batches as $i => $batch) {
     $finalInactive = array_values(array_unique(array_merge($finalInactive, $batchInactive)));
 
     // Write temps
-    file_put_contents($workingOut,  implode("\n", $finalWorking)  . "\n");
-    file_put_contents($inactiveOut, implode("\n", $finalInactive) . "\n");
+    file_put_contents($workingTemp,  implode("\n", $finalWorking)  . "\n");
+    file_put_contents($inactiveTemp, implode("\n", $finalInactive) . "\n");
+
+    // Commit this batch’s progress
+    echo "  Committing batch $num changes...\n";
+    flush();
+    exec("git add " . escapeshellarg($workingTemp) . " " . escapeshellarg($inactiveTemp));
+    exec("git config user.name 'github-actions[bot]'");
+    exec("git config user.email 'github-actions[bot]@users.noreply.github.com'");
+    $msg = "Retest batch $num/$totalBatches (" . date('Y-m-d H:i') . ")";
+    exec("git commit -m " . escapeshellarg($msg));
+    exec("git push");
+    echo "  Batch $num committed.\n";
+    flush();
 }
 
-echo "DNS retest complete for chunk $chunkNum/$totalChunks: $totalDomains domains.\n";
+// 5. Replace originals
+rename($workingTemp,  $workingFile);
+rename($inactiveTemp, $inactiveFile);
+
+echo "DNS retest complete: $totalDomains total domains.\n";
 echo "Final working count: " . count($finalWorking) . "\n";
 echo "Final inactive count: " . count($finalInactive) . "\n";
+flush();
+
+// 6. Prune the recent file of any newly inactive domains
+if (file_exists($recentFile)) {
+    $recent = file($recentFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    // remove any domain now in finalInactive
+    $pruned = array_values(array_diff($recent, $finalInactive));
+    $removedCount = count($recent) - count($pruned);
+
+    echo "Pruning recent file: removing $removedCount inactive domains...\n";
+    flush();
+
+    file_put_contents($recentFile, implode("\n", $pruned) . "\n");
+
+    // Commit the prune
+    exec("git add " . escapeshellarg($recentFile));
+    exec("git config user.name 'github-actions[bot]'");
+    exec("git config user.email 'github-actions[bot]@users.noreply.github.com'");
+    $msg2 = "Pruned recent file of $removedCount inactive domains (" . date('Y-m-d H:i') . ")";
+    exec("git commit -m " . escapeshellarg($msg2));
+    exec("git push");
+    echo "Recent file pruned and committed.\n";
+    flush();
+}
+
+echo "Retest process fully complete.\n";
 flush();
