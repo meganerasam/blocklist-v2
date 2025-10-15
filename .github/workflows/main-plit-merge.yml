@@ -1,0 +1,86 @@
+name: Update Domain Lists With Splitter and Merger
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight; adjust as needed.
+  workflow_dispatch:
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Split working_domains.txt into 30 chunks
+        run: php split_domains.php 30
+
+      - name: Upload chunk files
+        uses: actions/upload-artifact@v3
+        with:
+          name: domain-chunks
+          path: working_domains_chunk_*.txt
+
+  retest:
+    needs: split
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chunk: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download chunk files
+        uses: actions/download-artifact@v3
+        with:
+          name: domain-chunks
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Retest chunk ${{ matrix.chunk }}
+        run: php retest_domains.php ${{ matrix.chunk }} 30
+
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: retest-results-${{ matrix.chunk }}
+          path: |
+            working_domains_chunk_${{ matrix.chunk }}_result.txt
+            inactive_domains_chunk_${{ matrix.chunk }}_result.txt
+
+  merge:
+    needs: retest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download all results
+        uses: actions/download-artifact@v3
+        with:
+          path: ./results
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Merge chunk results
+        run: php merge_chunks.php 30
+
+      - name: Commit and push updated lists
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add working_domains.txt inactive_domains.txt
+          git commit -m "Update domain lists after chunked retest"
+          git push
