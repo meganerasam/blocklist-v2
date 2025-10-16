@@ -22,6 +22,7 @@ jobs:
         run: php update_domains.php
         
   split:
+    needs: update-domains
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
