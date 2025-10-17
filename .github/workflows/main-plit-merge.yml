@@ -97,7 +97,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin
+          git reset --hard origin/master
           git add working_domains.txt inactive_domains.txt
           git commit -m "Update domain lists after chunked retest"
-          git pull --rebase
           git push
