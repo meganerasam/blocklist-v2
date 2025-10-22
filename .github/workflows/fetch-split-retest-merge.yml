@@ -1,4 +1,4 @@
-name: Update Domain Lists With Splitter and Merger
+name: Fetch new domains, split, retest chunks, and merge
 
 on:
   schedule:
