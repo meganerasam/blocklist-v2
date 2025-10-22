@@ -1,24 +1,64 @@
 <?php
-// Usage: php merge_chunks.php <num_chunks>
-$numChunks = isset($argv[1]) ? intval($argv[1]) : 30;
-$workingAll = [];
+// File: merge_chunks.php
+declare(strict_types=1);
+
+$ROOT = __DIR__;
+$RESULTS_DIR = $ROOT . '/results';
+$OUT_WORKING  = $ROOT . '/working_domains.txt';
+$OUT_INACTIVE = $ROOT . '/inactive_domains.txt';
+
+function readLines(string $file): array {
+    if (!is_file($file)) return [];
+    $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+    $out = [];
+    foreach ($lines as $ln) {
+        $ln = trim($ln);
+        if ($ln === '' || $ln[0] === '#') continue;
+        $out[] = strtolower($ln);
+    }
+    return $out;
+}
+
+function writeLines(string $file, array $lines): void {
+    file_put_contents($file, implode("\n", $lines) . "\n");
+}
+
+$workingAll  = [];
 $inactiveAll = [];
 
-for ($i = 1; $i <= $numChunks; $i++) {
-    $wFile = __DIR__ . "/results/retest-results-{$i}/working_domains_chunk_{$i}_result.txt";
-    $inFile = __DIR__ . "/results/retest-results-{$i}/inactive_domains_chunk_{$i}_result.txt";
-    if (file_exists($wFile)) {
-        $w = file($wFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $workingAll = array_merge($workingAll, $w);
-    }
-    if (file_exists($inFile)) {
-        $in = file($inFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $inactiveAll = array_merge($inactiveAll, $in);
+// 1) Carry forward previously inactive
+$prevInactive = readLines($OUT_INACTIVE);
+if ($prevInactive) $inactiveAll = array_merge($inactiveAll, $prevInactive);
+
+// 2) Gather all chunk outputs under results/retest-results-*/
+if (is_dir($RESULTS_DIR)) {
+    $dirs = array_filter(glob($RESULTS_DIR . '/retest-results-*') ?: [], 'is_dir');
+    sort($dirs, SORT_NATURAL);
+
+    foreach ($dirs as $d) {
+        foreach (glob($d . '/working_domains_chunk_*_result.txt') ?: [] as $f) {
+            $workingAll = array_merge($workingAll, readLines($f));
+        }
+        foreach (glob($d . '/inactive_domains_chunk_*_result.txt') ?: [] as $f) {
+            $inactiveAll = array_merge($inactiveAll, readLines($f));
+        }
     }
 }
-$workingAll = array_unique($workingAll);
-$inactiveAll = array_unique($inactiveAll);
 
-file_put_contents(__DIR__ . "/working_domains.txt", implode("\n", $workingAll) . "\n");
-file_put_contents(__DIR__ . "/inactive_domains.txt", implode("\n", $inactiveAll) . "\n");
-echo "Merged all chunks.\n";
+// 3) Unique and make sets disjoint (inactive wins)
+$workingAll  = array_values(array_unique($workingAll));
+$inactiveAll = array_values(array_unique($inactiveAll));
+$inactiveSet = array_flip($inactiveAll);
+$workingAll  = array_values(array_filter($workingAll, fn($d) => !isset($inactiveSet[$d])));
+
+// 4) Sort for stable diffs
+sort($workingAll,  SORT_STRING);
+sort($inactiveAll, SORT_STRING);
+
+// 5) Write final lists
+writeLines($OUT_WORKING,  $workingAll);
+writeLines($OUT_INACTIVE, $inactiveAll);
+
+// 6) Summary for CI logs
+echo "Merged working: " . count($workingAll) . PHP_EOL;
+echo "Merged inactive: " . count($inactiveAll) . PHP_EOL;
