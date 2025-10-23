@@ -164,11 +164,11 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Ensure on master branch
+      - name: Ensure on master branch and hard reset
         run: |
           git fetch origin
           git checkout -B master origin/master
-          git pull --rebase origin master
+          git reset --hard origin/master
 
       - name: Commit and push updated lists (only if changed)
         run: |
