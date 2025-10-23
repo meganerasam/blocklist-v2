@@ -147,14 +147,11 @@ jobs:
         with:
           php-version: ${{ env.PHP_VERSION }}
 
-      - name: Sanity check artifact layout
+      - name: Ensure on master branch and hard reset
         run: |
-          echo "== Results tree =="
-          if [ -d ./results ]; then
-            find ./results -maxdepth 2 -type f -print | sort
-          else
-            echo "results/ not found"; exit 1
-          fi
+          git fetch origin
+          git checkout -B master origin/master
+          git reset --hard origin/master
 
       - name: Merge chunk results
         run: php merge_chunks.php
@@ -163,12 +160,6 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Ensure on master branch and hard reset
-        run: |
-          git fetch origin
-          git checkout -B master origin/master
-          git reset --hard origin/master
 
       - name: Commit and push updated lists (only if changed)
         run: |
