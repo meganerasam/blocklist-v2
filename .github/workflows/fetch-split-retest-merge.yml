@@ -150,7 +150,6 @@ jobs:
       - name: Ensure on master branch and hard reset
         run: |
           git fetch origin
-          git checkout -B master origin/master
           git reset --hard origin/master
 
       - name: Merge chunk results
