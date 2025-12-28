@@ -107717,3 +107717,5 @@ mcpixicraft.com
 trentbereal.com
 volokit2.fun
 xt-trk.com
+api.affiliations.site
+click.liftoff.io
