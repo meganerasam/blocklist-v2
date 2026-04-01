@@ -42,7 +42,8 @@ $txtUrls = [
 ];
 $txtWhitelist = [
     'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes.txt',
-    'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes2.txt'
+    'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes2.txt',
+    'https://raw.githubusercontent.com/meganerasam/whitelist-domains/master/whitelistes3.txt'
 ];
 $csvUrls = [
     'https://raw.githubusercontent.com/meganerasam/blocklist/main/blocklist.csv'
